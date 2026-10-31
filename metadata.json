@@ -1,0 +1,6 @@
+{
+  "name": "Naeem’s Uni Deadlines",
+  "description": "Mobile-friendly offline student deadline & fee tracker for Virtual University with countdowns, streaks, and GitHub sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

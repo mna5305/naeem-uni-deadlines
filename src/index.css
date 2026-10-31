@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+:root {
+  box-sizing: border-box;
+  --bg: #f3f0ff;
+  --card: #ffffff;
+  --text: #2a2540;
+  --muted: #7a7596;
+  --line: #e6e1f7;
+  --accent: #7c5cff;
+  --a: #7c5cff;
+  --q: #ff8a3d;
+  --g: #12b5a3;
+  --o: #ec5fa0;
+  --bad: #e5484d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14111e;
+    --card: #201c30;
+    --text: #efeaff;
+    --muted: #9a94b8;
+    --line: #332d4c;
+    --accent: #9b82ff;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14111e;
+  --card: #201c30;
+  --text: #efeaff;
+  --muted: #9a94b8;
+  --line: #332d4c;
+  --accent: #9b82ff;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: env(safe-area-inset-top, 0px);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.4;
+  min-height: 100vh;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input, textarea, [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+@keyframes glow {
+  0%, 100% {
+    background: rgba(229, 72, 77, 0.95);
+  }
+  50% {
+    background: rgba(255, 138, 61, 0.95);
+  }
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.65);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 9px rgba(229, 72, 77, 0);
+  }
+}
+
+@keyframes fly {
+  to {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--r));
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.97);
+    opacity: 0;
+  }
+}
+
+.fx-particle {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  font-size: 1.4rem;
+  animation: fly 0.95s ease-out forwards;
+}
+
+.alert-urgent {
+  animation: glow 1.2s ease-in-out infinite;
+}
+
+.task-urgent {
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+/* Hide scrollbars for filter pill rows while allowing horizontal scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

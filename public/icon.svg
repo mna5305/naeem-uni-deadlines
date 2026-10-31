@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6a4cff" />
+      <stop offset="65%" stop-color="#ec5fa0" />
+      <stop offset="100%" stop-color="#ff8a3d" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#3d1466" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  <!-- Background with smooth rounded rectangle -->
+  <rect width="512" height="512" rx="112" fill="url(#grad)" />
+  
+  <!-- Subtle circular halo ring -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="12" />
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-dasharray="1130" stroke-dashoffset="350" />
+
+  <!-- Graduation Cap Icon in Center -->
+  <g filter="url(#shadow)" fill="#ffffff">
+    <!-- Cap top diamond -->
+    <path d="M256 140 L400 206 L256 272 L112 206 Z" />
+    <!-- Cap skull cap underside -->
+    <path d="M164 235 L164 300 C164 340 348 340 348 300 L348 235 L256 277 Z" />
+    <!-- Tassel string and tassel -->
+    <path d="M148 222 L148 330 C144 332 140 338 140 345 C140 355 148 362 156 362 C164 362 172 355 172 345 C172 338 168 332 164 330 L164 229 Z" fill="#ffd54a" />
+  </g>
+  
+  <!-- Little star sparkles -->
+  <path d="M380 135 L384 148 L397 152 L384 156 L380 169 L376 156 L363 152 L376 148 Z" fill="#ffd54a" />
+  <path d="M125 150 L128 160 L138 163 L128 166 L125 176 L122 166 L112 163 L122 160 Z" fill="#ffffff" opacity="0.8" />
+</svg>
