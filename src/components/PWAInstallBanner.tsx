@@ -20,31 +20,36 @@ export const PWAInstallBanner: React.FC<PWAInstallBannerProps> = ({
     onCloseIOSModal?.();
   };
 
-  if (isInstalled && !forceOpenIOSModal) {
-    return null;
-  }
-
   return (
     <>
-      {/* Top Banner on mobile or browser when install prompt is available */}
-      {isInstallable && (
-        <div className="mb-3 bg-linear-to-r from-purple-700/80 via-pink-600/80 to-amber-600/80 p-2.5 rounded-2xl text-white shadow-md flex items-center justify-between gap-3 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">📲</span>
-            <div>
-              <p className="font-bold text-xs leading-tight">Install Uni Deadlines</p>
-              <p className="text-[11px] opacity-90 leading-tight">Works 100% offline & launches instantly</p>
-            </div>
+      {/* Top Banner on mobile offering direct APK Download & PWA Install */}
+      <div className="mb-3 bg-linear-to-r from-purple-700 via-pink-600 to-amber-600 p-2.5 rounded-2xl text-white shadow-md flex items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xl shrink-0">🤖</span>
+          <div className="min-w-0">
+            <p className="font-bold text-xs leading-tight truncate">Android App (APK)</p>
+            <p className="text-[11px] opacity-90 leading-tight">Installable offline app (274 KB)</p>
           </div>
-          <button
-            onClick={install}
-            className="flex items-center gap-1.5 bg-white text-purple-900 font-bold px-3 py-1.5 rounded-xl text-xs shadow hover:bg-white/90 active:scale-95 transition"
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <a
+            href="./Naeem-Uni-Deadlines.apk"
+            download="Naeem-Uni-Deadlines.apk"
+            className="flex items-center gap-1 bg-white text-purple-900 font-bold px-2.5 py-1.5 rounded-xl text-xs shadow-sm hover:bg-white/90 active:scale-95 transition"
           >
             <Download className="w-3.5 h-3.5" />
-            Install
-          </button>
+            Download APK
+          </a>
+          {isInstallable && (
+            <button
+              onClick={install}
+              className="bg-white/20 hover:bg-white/30 text-white font-bold px-2 py-1.5 rounded-xl text-xs active:scale-95 transition"
+            >
+              Install
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {/* iOS Safari Guide Modal */}
       {showGuide && (

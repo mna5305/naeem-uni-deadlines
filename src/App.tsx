@@ -420,6 +420,15 @@ export default function App() {
                   <span>📂</span>
                   <span>Restore from file</span>
                 </button>
+                <a
+                  href="./Naeem-Uni-Deadlines.apk"
+                  download="Naeem-Uni-Deadlines.apk"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[var(--bg)] transition text-left text-purple-600 dark:text-purple-400 font-bold"
+                >
+                  <span>🤖</span>
+                  <span>Download Android APK</span>
+                </a>
                 <button
                   onClick={() => {
                     setIsMenuOpen(false);
