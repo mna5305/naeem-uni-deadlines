@@ -45,9 +45,3 @@ export interface BackupData {
   tasks: Task[];
 }
 
-export interface GitHubSyncConfig {
-  token: string;
-  gistId: string;
-  lastSyncedAt?: string;
-  gistUrl?: string;
-}

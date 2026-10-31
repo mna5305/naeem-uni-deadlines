@@ -1,8 +1,7 @@
-import { Task, GitHubSyncConfig, BackupData } from '../types';
+import { Task, BackupData } from '../types';
 
 export const KEY = 'uni-tracker-v1';
 export const BK = 'uni-backups-v1';
-export const GITHUB_SYNC_KEY = 'uni-github-sync-v1';
 
 export function pad2(n: number): string {
   return n < 10 ? '0' + n : '' + n;
@@ -105,7 +104,7 @@ export function saveSnapshot(tasks: Task[]) {
     const dateKey = toLocalDatetime(new Date()).slice(0, 10);
     backups[dateKey] = tasks;
 
-    // Keep last 30 snapshots + before-restore
+    // Keep last 30 daily snapshots + before-restore
     const keys = Object.keys(backups)
       .filter((k) => k !== 'before-restore')
       .sort()
@@ -139,7 +138,7 @@ export function loadTasks(): Task[] {
     console.error('Error loading tasks from localStorage:', e);
   }
 
-  // Seed initial fee installment voucher data if fresh
+  // Seed initial 5 installments of Virtual University fee voucher
   const initialVoucher: Task[] = [
     {
       id: 'fee1',
@@ -148,7 +147,7 @@ export function loadTasks(): Task[] {
       type: 'f',
       amount: 6050,
       due: '2026-11-05T23:59',
-      note: 'Total voucher: Rs 16,650 in 5 installments (First installment)',
+      note: 'Total voucher: Rs 16,650 in 5 installments',
       star: true,
       done: false,
     },
@@ -235,17 +234,45 @@ export function saveTasks(tasks: Task[]) {
   saveSnapshot(tasks);
 }
 
-export function exportBackupJSON(tasks: Task[]) {
+// Mobile-friendly date and time stamped JSON file backup
+export async function downloadMobileBackup(tasks: Task[]): Promise<string> {
   const d = new Date();
   const filename = `UniTracker-Backup-${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}_${pad2(d.getHours())}-${pad2(d.getMinutes())}.json`;
-  const payload: BackupData = {
-    app: 'uni-tracker',
-    version: 1,
-    savedAt: new Date().toISOString(),
-    tasks,
-  };
+  const payload = JSON.stringify(
+    {
+      app: 'uni-tracker',
+      version: 1,
+      savedAt: new Date().toISOString(),
+      tasks,
+    },
+    null,
+    2
+  );
 
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  // Modern File System Access API (allows picking folder directly if browser supports it)
+  if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+    try {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: filename,
+        types: [
+          {
+            description: 'JSON Backup File',
+            accept: { 'application/json': ['.json'] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(payload);
+      await writable.close();
+      return filename;
+    } catch (err: any) {
+      if (err.name === 'AbortError') throw err;
+      // If user cancelled or not allowed, continue to blob download
+    }
+  }
+
+  // Standard mobile download to Downloads folder
+  const blob = new Blob([payload], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -255,99 +282,7 @@ export function exportBackupJSON(tasks: Task[]) {
   setTimeout(() => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, 100);
-}
+  }, 400);
 
-// GitHub Gist Cloud Sync
-export function loadGitHubConfig(): GitHubSyncConfig {
-  try {
-    const raw = localStorage.getItem(GITHUB_SYNC_KEY);
-    return raw ? JSON.parse(raw) : { token: '', gistId: '' };
-  } catch {
-    return { token: '', gistId: '' };
-  }
-}
-
-export function saveGitHubConfig(cfg: GitHubSyncConfig) {
-  try {
-    localStorage.setItem(GITHUB_SYNC_KEY, JSON.stringify(cfg));
-  } catch {}
-}
-
-export async function syncToGitHubGist(tasks: Task[], token: string, gistId?: string): Promise<{ gistId: string; gistUrl: string }> {
-  if (!token) throw new Error('GitHub Personal Access Token is required');
-
-  const content = JSON.stringify(
-    {
-      app: 'uni-tracker',
-      version: 1,
-      updatedAt: new Date().toISOString(),
-      tasksCount: tasks.length,
-      tasks,
-    },
-    null,
-    2
-  );
-
-  const payload = {
-    description: `Naeem's Uni Deadlines & Fees Cloud Backup - ${new Date().toLocaleDateString()}`,
-    public: false,
-    files: {
-      'uni-deadlines-backup.json': { content },
-    },
-  };
-
-  const isUpdate = !!gistId;
-  const url = isUpdate ? `https://api.github.com/gists/${gistId}` : 'https://api.github.com/gists';
-  const method = isUpdate ? 'PATCH' : 'POST';
-
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.message || `GitHub Gist error (${res.status})`);
-  }
-
-  const data = await res.json();
-  return {
-    gistId: data.id,
-    gistUrl: data.html_url,
-  };
-}
-
-export async function pullFromGitHubGist(token: string, gistId: string): Promise<Task[]> {
-  if (!gistId) throw new Error('Gist ID is required to pull data');
-
-  const headers: Record<string, string> = {
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const res = await fetch(`https://api.github.com/gists/${gistId}`, { headers });
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.message || `Failed to fetch Gist (${res.status})`);
-  }
-
-  const data = await res.json();
-  const file = data.files?.['uni-deadlines-backup.json'] || Object.values(data.files || {})[0] as any;
-  if (!file || !file.content) throw new Error('No valid deadline file found in this Gist');
-
-  const parsed = JSON.parse(file.content);
-  const tasks = Array.isArray(parsed) ? parsed : parsed.tasks;
-  if (!Array.isArray(tasks)) throw new Error('Gist contents do not match task format');
-
-  return tasks;
+  return filename;
 }

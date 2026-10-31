@@ -6,23 +6,20 @@ import {
   getTaskGroup,
   calculateStreak,
   formatRemaining,
-  exportBackupJSON,
+  downloadMobileBackup,
   getAllBackups,
   toLocalDatetime,
 } from './utils/storage';
 import { TaskCard } from './components/TaskCard';
 import { AddTaskPanel } from './components/AddTaskPanel';
 import { FeeScannerModal } from './components/FeeScannerModal';
-import { GitHubSyncModal } from './components/GitHubSyncModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
-import { OfflineBadge } from './components/OfflineBadge';
 import {
   Plus,
   Search,
   MoreVertical,
   Download,
   Upload,
-  Cloud,
   Moon,
   Sun,
   Camera,
@@ -38,7 +35,6 @@ const MOTIVATIONAL_QUOTES = [
   'Done is better than perfect.',
   'One task at a time. You have got this.',
   'Deadlines are just plans with a date.',
-  'Consistent effort is the key to top grades in university.',
 ];
 
 export default function App() {
@@ -49,7 +45,6 @@ export default function App() {
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [feeModalMode, setFeeModalMode] = useState<'scan' | 'manual' | null>(null);
-  const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [showIOSInstallGuide, setShowIOSInstallGuide] = useState(false);
   const [quote, setQuote] = useState(MOTIVATIONAL_QUOTES[0]);
   const [isDark, setIsDark] = useState(false);
@@ -60,13 +55,13 @@ export default function App() {
 
   const toastTimerRef = useRef<any>(null);
   const addPanelRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize random quote & theme & backups
+  // Initialize theme, quote, and local snapshots
   useEffect(() => {
     const q = MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
     setQuote(q);
 
-    // Initial theme detection
     const savedTheme = document.documentElement.dataset.theme;
     if (savedTheme) {
       setIsDark(savedTheme === 'dark');
@@ -78,7 +73,6 @@ export default function App() {
     setBackupsList(getAllBackups());
   }, []);
 
-  // Sync dark theme attribute on root
   const toggleTheme = () => {
     const next = !isDark;
     setIsDark(next);
@@ -93,7 +87,6 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Save tasks and refresh backups state on change
   const updateTasks = (newTasks: Task[], notifyMsg?: string, undoCallback?: () => void) => {
     setTasks(newTasks);
     saveTasks(newTasks);
@@ -109,6 +102,16 @@ export default function App() {
     toastTimerRef.current = setTimeout(() => {
       setToastInfo(null);
     }, 4500);
+  };
+
+  // Mobile backup handler: saves dated JSON to mobile folder
+  const handleBackupNow = async () => {
+    try {
+      const filename = await downloadMobileBackup(tasks);
+      showToast(`Backup saved to mobile (${filename}) ✅`);
+    } catch {
+      showToast('Backup cancelled or could not save file.');
+    }
   };
 
   // Task actions
@@ -165,29 +168,27 @@ export default function App() {
       done: false,
     };
     const next = [newTask, ...tasks];
-    updateTasks(next, 'Saved deadline ✨');
+    updateTasks(next, 'Saved it ✨');
   };
 
-  // Add multiple fee installments from scanner/manual
   const handleAddInstallments = (installments: InstallmentRow[], totalAmount?: number) => {
     let addedCount = 0;
     const next = [...tasks];
     installments.forEach((row, i) => {
-      // Check duplicate
       const exists = next.some(
         (t) => t.type === 'f' && Number(t.amount) === row.amount && (t.due || '').slice(0, 10) === row.due
       );
       if (!exists) {
         next.push({
-          id: 'fee_' + Date.now().toString(36) + '_' + i,
+          id: 'fee' + Date.now().toString(36) + i,
           title: `Fee installment ${row.no || i + 1} of ${installments.length}`,
-          course: 'VU Accounts',
+          course: '',
           type: 'f',
           amount: row.amount,
           due: row.due ? `${row.due}T23:59` : '',
           note:
             addedCount === 0 && totalAmount
-              ? `Voucher total: Rs ${totalAmount.toLocaleString()} in ${installments.length} installments`
+              ? `Total voucher: Rs ${totalAmount.toLocaleString()} in ${installments.length} installments`
               : '',
           star: i < 2,
           done: false,
@@ -196,11 +197,10 @@ export default function App() {
       }
     });
 
-    updateTasks(next, addedCount > 0 ? `Added ${addedCount} installments ✅` : 'No new installments to add');
+    updateTasks(next, addedCount > 0 ? `Added ${addedCount} installments ✅` : 'Nothing new to add');
     setFilter('f');
   };
 
-  // Restore snapshot from 30-day backup history
   const handleRestoreSnapshot = (dateKey: string) => {
     const backups = getAllBackups();
     const snapshot = backups[dateKey];
@@ -211,10 +211,9 @@ export default function App() {
       localStorage.setItem('uni-backups-v1', JSON.stringify(backups));
     } catch {}
 
-    updateTasks(snapshot, 'Restored snapshot! Previous list kept as "Before last restore"');
+    updateTasks(snapshot, 'Restored. Your previous list is kept as Before last restore.');
   };
 
-  // File import for backup
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -229,7 +228,7 @@ export default function App() {
           .filter((t: any) => t && typeof t.title === 'string')
           .map((t: any, idx: number) => ({
             ...t,
-            id: t.id || `imp_${Date.now()}_${idx}`,
+            id: t.id || `r${Date.now().toString(36)}${idx}`,
           }));
 
         const backups = getAllBackups();
@@ -238,7 +237,7 @@ export default function App() {
           localStorage.setItem('uni-backups-v1', JSON.stringify(backups));
         } catch {}
 
-        updateTasks(validTasks, `Restored ${validTasks.length} tasks from file! ✅`);
+        updateTasks(validTasks, `Restored ${validTasks.length} tasks ✅`);
       } catch {
         showToast('That file is not a valid backup');
       }
@@ -247,7 +246,7 @@ export default function App() {
     e.target.value = '';
   };
 
-  // Calculated statistics
+  // Calculations
   const pendingTasks = useMemo(() => tasks.filter((t) => !t.done), [tasks]);
   const completedTasks = useMemo(() => tasks.filter((t) => t.done), [tasks]);
   const completionPercentage = tasks.length ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
@@ -264,7 +263,6 @@ export default function App() {
     [pendingTasks]
   );
 
-  // Urgent tasks (< 24 hours left and not overdue)
   const urgentTasks = useMemo(() => {
     return pendingTasks
       .filter((t) => {
@@ -275,7 +273,6 @@ export default function App() {
       .sort((a, b) => new Date(a.due).getTime() - new Date(b.due).getTime());
   }, [pendingTasks, currentTime]);
 
-  // Next up task
   const nextUpTask = useMemo(() => {
     const sortedDated = pendingTasks
       .filter((t) => t.due)
@@ -283,7 +280,6 @@ export default function App() {
     return sortedDated[0] || null;
   }, [pendingTasks]);
 
-  // Filter count helper
   const getFilterCount = (f: FilterKey) => {
     if (f === 'all') return pendingTasks.length;
     if (f === 'done') return completedTasks.length;
@@ -291,7 +287,6 @@ export default function App() {
     return pendingTasks.filter((t) => t.type === f).length;
   };
 
-  // Fee summary stats
   const feeStats = useMemo(() => {
     const feeTasks = tasks.filter((t) => t.type === 'f');
     let total = 0;
@@ -309,11 +304,9 @@ export default function App() {
     };
   }, [tasks]);
 
-  // Filtered and grouped tasks
   const filteredTasks = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return tasks.filter((t) => {
-      // Type / Status filter
       if (filter === 'done') {
         if (!t.done) return false;
       } else if (filter === 'today') {
@@ -324,7 +317,6 @@ export default function App() {
         if (t.type !== filter) return false;
       }
 
-      // Search query filter
       if (!query) return true;
       const haystack = `${t.title} ${t.course || ''} ${t.label || ''} ${t.note || ''}`.toLowerCase();
       return haystack.includes(query);
@@ -339,7 +331,6 @@ export default function App() {
     return Array.from(set);
   }, [tasks]);
 
-  // Greeting based on hour
   const greeting = useMemo(() => {
     const h = new Date().getHours();
     if (h < 12) return 'Good morning ☀️';
@@ -351,7 +342,6 @@ export default function App() {
     return new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
   }, []);
 
-  // Groups definitions
   const groupOrder: { key: string; label: string }[] = [
     { key: 'over', label: '⚠️ Overdue' },
     { key: 'today', label: '🔥 Today' },
@@ -364,8 +354,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] transition-colors duration-200">
-      <OfflineBadge />
-
       <main className="max-w-[640px] mx-auto px-3.5 pt-3.5 pb-24">
         <PWAInstallBanner
           forceOpenIOSModal={showIOSInstallGuide}
@@ -374,7 +362,6 @@ export default function App() {
 
         {/* HEADER */}
         <header className="relative bg-linear-to-br from-[#6a4cff] via-[#ec5fa0] to-[#ff8a3d] text-white rounded-3xl p-4.5 shadow-xl shadow-purple-900/20">
-          {/* Top Bar with 3-dot Menu */}
           <div className="relative text-center pt-1 px-8 pb-1">
             <button
               onClick={(e) => {
@@ -387,11 +374,11 @@ export default function App() {
               <MoreVertical className="w-5 h-5" />
             </button>
 
-            {/* Dropdown Menu */}
+            {/* Exact Original Dropdown Menu */}
             {isMenuOpen && (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute top-11 right-0 min-w-56 bg-[var(--card)] text-[var(--text)] border border-[var(--line)] rounded-2xl p-1.5 shadow-2xl z-40 text-left text-xs font-semibold"
+                className="absolute top-11 right-0 min-w-52 bg-[var(--card)] text-[var(--text)] border border-[var(--line)] rounded-2xl p-1.5 shadow-2xl z-40 text-left text-xs font-semibold"
               >
                 <button
                   onClick={() => {
@@ -400,7 +387,7 @@ export default function App() {
                   }}
                   className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[var(--bg)] transition text-left"
                 >
-                  <Camera className="w-4 h-4 text-purple-500" />
+                  <span>📸</span>
                   <span>Add fees from screenshot</span>
                 </button>
                 <button
@@ -410,39 +397,29 @@ export default function App() {
                   }}
                   className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[var(--bg)] transition text-left"
                 >
-                  <Edit3 className="w-4 h-4 text-emerald-500" />
+                  <span>✍️</span>
                   <span>Add fees manually</span>
                 </button>
                 <button
                   onClick={() => {
                     setIsMenuOpen(false);
-                    setShowGitHubModal(true);
+                    handleBackupNow();
                   }}
                   className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[var(--bg)] transition text-left"
                 >
-                  <Cloud className="w-4 h-4 text-blue-500" />
-                  <span>GitHub Sync &amp; Pages</span>
+                  <span>💾</span>
+                  <span>Backup now</span>
                 </button>
                 <button
                   onClick={() => {
                     setIsMenuOpen(false);
-                    exportBackupJSON(tasks);
+                    fileInputRef.current?.click();
                   }}
                   className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[var(--bg)] transition text-left"
                 >
-                  <Download className="w-4 h-4 text-amber-500" />
-                  <span>Backup to JSON file</span>
-                </button>
-                <label className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[var(--bg)] transition text-left cursor-pointer">
-                  <Upload className="w-4 h-4 text-pink-500" />
+                  <span>📂</span>
                   <span>Restore from file</span>
-                  <input
-                    type="file"
-                    accept=".json,application/json"
-                    onChange={handleImportFile}
-                    className="hidden"
-                  />
-                </label>
+                </button>
                 <button
                   onClick={() => {
                     setIsMenuOpen(false);
@@ -450,7 +427,7 @@ export default function App() {
                   }}
                   className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[var(--bg)] transition text-left"
                 >
-                  <Smartphone className="w-4 h-4 text-purple-500" />
+                  <span>📲</span>
                   <span>Install App Guide</span>
                 </button>
                 <div className="my-1 border-t border-[var(--line)]" />
@@ -461,15 +438,20 @@ export default function App() {
                   }}
                   className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[var(--bg)] transition text-left"
                 >
-                  {isDark ? (
-                    <Sun className="w-4 h-4 text-amber-400" />
-                  ) : (
-                    <Moon className="w-4 h-4 text-indigo-400" />
-                  )}
-                  <span>Toggle {isDark ? 'Light' : 'Dark'} Mode</span>
+                  <span>🌓</span>
+                  <span>Light / Dark</span>
                 </button>
               </div>
             )}
+
+            {/* Hidden File Input for Restore */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleImportFile}
+              className="hidden"
+            />
 
             {/* Logo */}
             <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/22 flex items-center justify-center text-2xl shadow-inner border-2 border-white/35">
@@ -491,7 +473,6 @@ export default function App() {
 
           {/* Hero Statistics Section */}
           <div className="flex items-center gap-3.5 mt-3.5">
-            {/* Circular Progress Ring */}
             <div className="relative w-18 h-18 shrink-0">
               <svg viewBox="0 0 76 76" className="w-18 h-18 -rotate-90">
                 <circle cx="38" cy="38" r="31" fill="none" strokeWidth="8" stroke="rgba(255,255,255,0.25)" />
@@ -658,7 +639,7 @@ export default function App() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="🔍 Search tasks, courses, or notes..."
+              placeholder="🔍 Search tasks or courses"
               className="w-full pl-9 pr-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--card)] text-[var(--text)] text-xs focus:outline-2 focus:outline-[var(--accent)]"
             />
           </div>
@@ -695,15 +676,15 @@ export default function App() {
             <div className="flex gap-2">
               <button
                 onClick={() => setFeeModalMode('scan')}
-                className="flex-1 py-2.5 px-3 rounded-xl bg-[var(--accent)] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-98 transition"
+                className="flex-1 py-3 px-3 rounded-xl bg-[var(--accent)] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-98 transition"
               >
-                <Camera className="w-3.5 h-3.5" /> 📸 From screenshot
+                <span>📸</span> From screenshot
               </button>
               <button
                 onClick={() => setFeeModalMode('manual')}
-                className="flex-1 py-2.5 px-3 rounded-xl bg-[var(--card)] border border-[var(--line)] text-[var(--text)] text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs active:scale-98 transition"
+                className="flex-1 py-3 px-3 rounded-xl bg-[var(--accent)] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-98 transition"
               >
-                <Edit3 className="w-3.5 h-3.5" /> ✍️ Add manually
+                <span>✍️</span> Add manually
               </button>
             </div>
           </div>
@@ -715,7 +696,6 @@ export default function App() {
             const groupItems = filteredTasks.filter((t) => getTaskGroup(t) === group.key);
             if (groupItems.length === 0) return null;
 
-            // Sort: Starred first, then by due date ascending
             groupItems.sort((a, b) => {
               if (b.star !== a.star) return b.star ? 1 : -1;
               const aTime = a.due ? new Date(a.due).getTime() : Infinity;
@@ -723,7 +703,6 @@ export default function App() {
               return aTime - bTime;
             });
 
-            // Completed tasks collapsible
             if (group.key === 'done') {
               return (
                 <div key={group.key} className="pt-2">
@@ -787,60 +766,58 @@ export default function App() {
           {filteredTasks.length === 0 && (
             <div className="text-center py-12 text-[var(--muted)] space-y-2">
               <span className="text-4xl block">🎉</span>
-              <p className="text-sm font-semibold">Nothing here right now!</p>
-              <p className="text-xs">Add your first deadline or task using the + button below.</p>
+              <p className="text-sm font-semibold">Nothing here yet.</p>
+              <p className="text-xs">Add your first task above!</p>
             </div>
           )}
         </div>
 
-        {/* Backup & Restore Accordion */}
+        {/* Exact Backup & Restore Details Component from Original HTML */}
         <details className="mt-8 bg-[var(--card)] border border-[var(--line)] rounded-2xl p-3.5 text-xs shadow-xs">
-          <summary className="font-bold cursor-pointer select-none text-[var(--text)]">
-            💾 Backup, Restore &amp; History
+          <summary className="font-bold cursor-pointer select-none text-[var(--text)] text-sm">
+            💾 Backup &amp; restore
           </summary>
           <div className="mt-3 space-y-3 pt-2 border-t border-[var(--line)]">
-            <p className="text-[var(--muted)]">
-              Backup creates a dated <code>.json</code> file on your phone or computer. Restore lets you reload your full task history anytime.
+            <p className="text-[var(--muted)] leading-relaxed">
+              Backup saves a dated <code>.json</code> file to your phone (usually the Downloads folder). Restore lets you pick that file again whenever you need it. The 💾 and 📂 buttons at the top do the same.
             </p>
 
             <div className="flex gap-2">
               <button
-                onClick={() => exportBackupJSON(tasks)}
-                className="flex-1 py-2 px-3 rounded-xl bg-[var(--accent)] text-white font-bold flex items-center justify-center gap-1.5 shadow-xs hover:opacity-90 active:scale-98 transition"
+                onClick={handleBackupNow}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-[var(--accent)] text-white font-bold flex items-center justify-center gap-1.5 shadow-xs hover:opacity-90 active:scale-98 transition text-xs"
               >
-                <Download className="w-3.5 h-3.5" /> ⬇️ Backup now
+                ⬇️ Backup now
               </button>
 
-              <label className="flex-1 py-2 px-3 rounded-xl bg-[var(--bg)] border border-[var(--line)] font-bold text-[var(--text)] flex items-center justify-center gap-1.5 cursor-pointer shadow-xs hover:opacity-90 active:scale-98 transition">
-                <Upload className="w-3.5 h-3.5" /> ⬆️ Restore file
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={handleImportFile}
-                  className="hidden"
-                />
-              </label>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-[var(--accent)] text-white font-bold flex items-center justify-center gap-1.5 shadow-xs hover:opacity-90 active:scale-98 transition text-xs"
+              >
+                ⬆️ Restore from file
+              </button>
             </div>
 
-            {/* Direct JSON text backup/restore */}
-            <details className="pt-1">
-              <summary className="font-semibold text-[var(--muted)] cursor-pointer">
-                Text copy &amp; paste options
+            {/* More options nested details */}
+            <details className="mt-3 pt-1 border-t border-[var(--line)]">
+              <summary className="font-bold text-[var(--muted)] cursor-pointer py-1">
+                More options
               </summary>
               <div className="mt-2 space-y-2">
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={backupText || JSON.stringify(tasks, null, 2)}
                   onChange={(e) => setBackupText(e.target.value)}
+                  spellCheck={false}
                   className="w-full p-2 rounded-xl border border-[var(--line)] bg-[var(--bg)] font-mono text-[10px]"
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(JSON.stringify(tasks, null, 2));
-                      showToast('Copied JSON to clipboard 📋');
+                      showToast('Copied 📋');
                     }}
-                    className="flex-1 py-1.5 rounded-lg bg-[var(--bg)] border border-[var(--line)] font-semibold text-[11px]"
+                    className="flex-1 py-2 rounded-xl bg-[var(--accent)] text-white font-bold text-xs"
                   >
                     Copy
                   </button>
@@ -850,63 +827,61 @@ export default function App() {
                         const parsed = JSON.parse(backupText);
                         const arr = Array.isArray(parsed) ? parsed : parsed.tasks;
                         if (!Array.isArray(arr)) throw new Error();
-                        updateTasks(arr, 'Restored from text ✅');
+                        updateTasks(arr, 'Restored ✅');
                       } catch {
                         showToast('That text is not valid backup data');
                       }
                     }}
-                    className="flex-1 py-1.5 rounded-lg bg-[var(--accent)] text-white font-semibold text-[11px]"
+                    className="flex-1 py-2 rounded-xl bg-[var(--accent)] text-white font-bold text-xs"
                   >
                     Restore from text
                   </button>
                 </div>
+
+                <p className="text-[var(--muted)] pt-2 font-medium">
+                  Automatic safety copies kept inside this browser (one per day, last 30 days):
+                </p>
+
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {Object.keys(backupsList)
+                    .sort()
+                    .reverse()
+                    .map((k) => {
+                      const snapTasks = backupsList[k] || [];
+                      const pendingCount = snapTasks.filter((t) => !t.done).length;
+                      const label =
+                        k === 'before-restore'
+                          ? '↩️ Before last restore'
+                          : new Date(`${k}T12:00`).toLocaleDateString([], {
+                              weekday: 'short',
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            });
+
+                      return (
+                        <div
+                          key={k}
+                          className="flex justify-between items-center p-2 rounded-xl bg-[var(--bg)] border border-[var(--line)]"
+                        >
+                          <div>
+                            <b className="block text-[11px] font-bold text-[var(--text)]">{label}</b>
+                            <span className="text-[10px] text-[var(--muted)]">
+                              {snapTasks.length} tasks · {pendingCount} pending
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleRestoreSnapshot(k)}
+                            className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white font-bold text-[10px] hover:opacity-90"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
             </details>
-
-            {/* Daily Safety Snapshots */}
-            <div className="pt-2">
-              <p className="font-bold text-[var(--text)] mb-1">
-                Daily Automatic Safety Copies (last 30 days):
-              </p>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {Object.keys(backupsList)
-                  .sort()
-                  .reverse()
-                  .map((k) => {
-                    const snapTasks = backupsList[k] || [];
-                    const pendingCount = snapTasks.filter((t) => !t.done).length;
-                    const label =
-                      k === 'before-restore'
-                        ? '↩️ Before last restore'
-                        : new Date(`${k}T12:00`).toLocaleDateString([], {
-                            weekday: 'short',
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          });
-
-                    return (
-                      <div
-                        key={k}
-                        className="flex justify-between items-center p-2 rounded-xl bg-[var(--bg)] border border-[var(--line)]"
-                      >
-                        <div>
-                          <b className="block text-[11px] font-bold text-[var(--text)]">{label}</b>
-                          <span className="text-[10px] text-[var(--muted)]">
-                            {snapTasks.length} tasks · {pendingCount} pending
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => handleRestoreSnapshot(k)}
-                          className="px-2.5 py-1 rounded-lg bg-[var(--accent)] text-white font-bold text-[10px] hover:opacity-90"
-                        >
-                          Restore
-                        </button>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
           </div>
         </details>
       </main>
@@ -919,15 +894,15 @@ export default function App() {
             addPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }, 50);
         }}
-        aria-label="Add deadline"
-        className="fixed right-4.5 bottom-[calc(20px+env(safe-area-inset-bottom,0px))] w-14 h-14 rounded-full bg-linear-to-br from-[#7c5cff] to-[#ec5fa0] text-white flex items-center justify-center shadow-xl shadow-purple-600/40 text-2xl z-30 active:scale-90 hover:scale-105 transition"
+        aria-label="Add task"
+        className="fixed right-4.5 bottom-[calc(18px+env(safe-area-inset-bottom,0px))] w-14 h-14 rounded-full bg-linear-to-br from-[#7c5cff] to-[#ec5fa0] text-white flex items-center justify-center shadow-xl shadow-purple-600/40 text-3xl z-30 active:scale-90 hover:scale-105 transition"
       >
-        <Plus className="w-7 h-7 stroke-[2.5]" />
+        +
       </button>
 
-      {/* Toast Notification with Undo */}
+      {/* Floating Toast Notification with Undo */}
       {toastInfo && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-[calc(20px+env(safe-area-inset-bottom,0px))] z-50 bg-[#2a2540] text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 text-xs border border-white/10 animate-fade-in">
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-[calc(18px+env(safe-area-inset-bottom,0px))] z-50 bg-[#2a2540] text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 text-xs border border-white/10 max-w-[92%]">
           <span>{toastInfo.message}</span>
           {toastInfo.undoAction && (
             <button
@@ -943,24 +918,13 @@ export default function App() {
         </div>
       )}
 
-      {/* Fee Scanner Modal */}
+      {/* Fee Scanner & Manual Installment Modal */}
       {feeModalMode && (
         <FeeScannerModal
           initialMode={feeModalMode}
           existingTasks={tasks}
           onAddInstallments={handleAddInstallments}
           onClose={() => setFeeModalMode(null)}
-        />
-      )}
-
-      {/* GitHub Sync Modal */}
-      {showGitHubModal && (
-        <GitHubSyncModal
-          tasks={tasks}
-          onTasksUpdated={(newTasks, msg) => {
-            updateTasks(newTasks, msg);
-          }}
-          onClose={() => setShowGitHubModal(false)}
         />
       )}
     </div>
