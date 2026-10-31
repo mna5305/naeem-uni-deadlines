@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== Building Android APK for Naeem's Uni Deadlines ==="
+echo "=== Building Android APK (API 33 / Android 13-14 Compatible) ==="
 
-# 1. Clean and setup workspace
 APK_DIR="/tmp/apk_build"
 rm -rf "$APK_DIR"
-mkdir -p "$APK_DIR"/gen "$APK_DIR"/bin "$APK_DIR"/res/values "$APK_DIR"/res/mipmap-mdpi "$APK_DIR"/res/mipmap-hdpi "$APK_DIR"/res/mipmap-xhdpi "$APK_DIR"/res/mipmap-xxhdpi "$APK_DIR"/assets/www "$APK_DIR"/src/com/naeem/unideadlines
+mkdir -p "$APK_DIR"/gen "$APK_DIR"/bin "$APK_DIR"/res/values "$APK_DIR"/res/mipmap-mdpi "$APK_DIR"/res/mipmap-hdpi "$APK_DIR"/res/mipmap-xhdpi "$APK_DIR"/res/mipmap-xxhdpi "$APK_DIR"/assets/www "$APK_DIR"/src/com/mna5305/unideadlines
 
-# 2. Build client dist
+# 1. Build client dist
 cd /app/applet
 npm run build
 cp -r dist/* "$APK_DIR"/assets/www/
+rm -f "$APK_DIR"/assets/www/*.apk*
 
-# 3. Create icons in res
+# 2. Setup icons
 cp public/pwa-192x192.png "$APK_DIR"/res/mipmap-mdpi/ic_launcher.png
 cp public/pwa-192x192.png "$APK_DIR"/res/mipmap-hdpi/ic_launcher.png
 cp public/pwa-192x192.png "$APK_DIR"/res/mipmap-xhdpi/ic_launcher.png
 cp public/pwa-512x512.png "$APK_DIR"/res/mipmap-xxhdpi/ic_launcher.png
 
-# 4. Create strings.xml
+# 3. Create strings.xml
 cat << 'EOF' > "$APK_DIR"/res/values/strings.xml
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
@@ -27,30 +27,32 @@ cat << 'EOF' > "$APK_DIR"/res/values/strings.xml
 </resources>
 EOF
 
-# 5. Create AndroidManifest.xml
+# 4. Create AndroidManifest.xml (API 33 / Android 14 compliant)
 cat << 'EOF' > "$APK_DIR"/AndroidManifest.xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.naeem.unideadlines"
-    android:versionCode="1"
-    android:versionName="1.0.0">
+    package="com.mna5305.unideadlines"
+    android:versionCode="2"
+    android:versionName="1.0.1">
 
-    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="23" />
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="33" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@android:style/Theme.NoTitleBar">
+        android:theme="@android:style/Theme.NoTitleBar"
+        android:hasCode="true"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
             android:exported="true"
-            android:label="@string/app_name">
+            android:label="@string/app_name"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -60,9 +62,9 @@ cat << 'EOF' > "$APK_DIR"/AndroidManifest.xml
 </manifest>
 EOF
 
-# 6. Create MainActivity.java
-cat << 'EOF' > "$APK_DIR"/src/com/naeem/unideadlines/MainActivity.java
-package com.naeem.unideadlines;
+# 5. Create MainActivity.java
+cat << 'EOF' > "$APK_DIR"/src/com/mna5305/unideadlines/MainActivity.java
+package com.mna5305.unideadlines;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -70,6 +72,8 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebChromeClient;
+import android.view.View;
+import android.graphics.Color;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -77,7 +81,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
         webView = new WebView(this);
+        webView.setBackgroundColor(Color.parseColor("#f3f0ff"));
         setContentView(webView);
 
         WebSettings settings = webView.getSettings();
@@ -94,7 +100,7 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
 
-        // Load 100% offline bundled HTML/JS/CSS
+        // Load 100% offline bundled HTML/JS/CSS app
         webView.loadUrl("file:///android_asset/www/index.html");
     }
 
@@ -109,14 +115,14 @@ public class MainActivity extends Activity {
 }
 EOF
 
-# 7. Compile resources and Java code
-ANDROID_JAR="/usr/lib/android-sdk/platforms/android-23/android.jar"
+# 6. Compile resources and Java code with API 33 android.jar
+ANDROID_JAR="/opt/android-sdk/platforms/android-13/android.jar"
 
 echo "Generating R.java..."
 aapt package -m -J "$APK_DIR"/gen -M "$APK_DIR"/AndroidManifest.xml -S "$APK_DIR"/res -I "$ANDROID_JAR"
 
 echo "Compiling Java sources..."
-javac -source 1.8 -target 1.8 -bootclasspath "$ANDROID_JAR" -d "$APK_DIR"/bin "$APK_DIR"/gen/com/naeem/unideadlines/R.java "$APK_DIR"/src/com/naeem/unideadlines/MainActivity.java
+javac -source 1.8 -target 1.8 -bootclasspath "$ANDROID_JAR" -d "$APK_DIR"/bin "$APK_DIR"/gen/com/mna5305/unideadlines/R.java "$APK_DIR"/src/com/mna5305/unideadlines/MainActivity.java
 
 echo "Dexing classes..."
 dalvik-exchange --dex --output="$APK_DIR"/bin/classes.dex "$APK_DIR"/bin
@@ -126,14 +132,18 @@ aapt package -f -M "$APK_DIR"/AndroidManifest.xml -S "$APK_DIR"/res -A "$APK_DIR
 cd "$APK_DIR"/bin
 aapt add app.unsigned.apk classes.dex
 
-echo "Generating signing key..."
-if [ ! -f /tmp/debug.keystore ]; then
-    keytool -genkeypair -v -keystore /tmp/debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
-fi
+echo "Generating Release signing key..."
+rm -f /tmp/release.keystore
+keytool -genkeypair -v -keystore /tmp/release.keystore -alias unideadlines -keyalg RSA -keysize 2048 -validity 10000 -storepass NaeemDeadlines2026 -keypass NaeemDeadlines2026 -dname "CN=Naeem Uni Deadlines,OU=Education,O=Virtual University,L=Lahore,ST=Punjab,C=PK"
 
-echo "Zipaligning and signing APK..."
-zipalign -f -v 4 "$APK_DIR"/bin/app.unsigned.apk /app/applet/public/Naeem-Uni-Deadlines.apk
-apksigner sign --ks /tmp/debug.keystore --ks-pass pass:android --key-pass pass:android /app/applet/public/Naeem-Uni-Deadlines.apk
+echo "Zipaligning APK..."
+zipalign -f -p -v 4 "$APK_DIR"/bin/app.unsigned.apk /app/applet/public/Naeem-Uni-Deadlines.apk
+
+echo "Signing APK with v1, v2, v3 schemes..."
+apksigner sign --ks /tmp/release.keystore --ks-pass pass:NaeemDeadlines2026 --key-pass pass:NaeemDeadlines2026 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true /app/applet/public/Naeem-Uni-Deadlines.apk
+
+echo "Verifying APK..."
+apksigner verify -v /app/applet/public/Naeem-Uni-Deadlines.apk
 
 echo "APK build complete!"
 ls -lh /app/applet/public/Naeem-Uni-Deadlines.apk
